@@ -1,130 +1,82 @@
 import os
 import numpy as np
 from PIL import Image
-import matplotlib.pyplot as plt
 from collections import Counter
-from tqdm import tqdm
+import json
 
-# ==========================
-# PATH CONFIGURATION
-# ==========================
+BASE_DIR = ".."
 
-# Get the absolute path to the project root (one level up from this script)
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+IMAGE_DIR = os.path.join(BASE_DIR, "images")
+SEGM_DIR = os.path.join(BASE_DIR, "segm")
 
-BASE_PATH = os.path.join(PROJECT_ROOT, "data_clean")
-TRAIN_IMG = os.path.join(BASE_PATH, "images")
-TRAIN_MASK = os.path.join(BASE_PATH, "masks")
-TRAIN_SEG = os.path.join(BASE_PATH, "segmentations")
+# -----------------------------
+# 1. Count dataset size
+# -----------------------------
 
-# ==========================
-# 1️⃣ Basic Dataset Stats
-# ==========================
+images = [f for f in os.listdir(IMAGE_DIR) if f.endswith(".jpg")]
+segm = [f for f in os.listdir(SEGM_DIR) if f.endswith(".png")]
 
-train_images = sorted(os.listdir(TRAIN_IMG))
-train_masks = sorted(os.listdir(TRAIN_MASK))
-train_seg = sorted(os.listdir(TRAIN_SEG))
+print("Total images:", len(images))
+print("Total segmentation masks:", len(segm))
 
-print("Total Train Images:", len(train_images))
-print("Total Train Masks:", len(train_masks))
-print("Total Train Segmented:", len(train_seg))
 
-# ==========================
-# 2️⃣ Check Alignment
-# ==========================
+# -----------------------------
+# 2. Check filename alignment
+# -----------------------------
 
-print("\nChecking filename alignment...")
+image_names = set([os.path.splitext(f)[0] for f in images])
+segm_names = set([os.path.splitext(f)[0] for f in segm])
 
-mismatch = 0
-for img, mask in zip(train_images, train_masks):
-    if img != mask:
-        mismatch += 1
+missing_masks = image_names - segm_names
+missing_images = segm_names - image_names
 
-print("Filename mismatches:", mismatch)
+print("\nImages without segmentation:", len(missing_masks))
+print("Segmentations without image:", len(missing_images))
 
-# ==========================
-# 3️⃣ Image Resolution Analysis
-# ==========================
 
-print("\nChecking image resolutions...")
+# -----------------------------
+# 3. Check image sizes
+# -----------------------------
 
-resolutions = []
+sizes = []
 
-for img_name in tqdm(train_images[:500]):  # check first 500
-    img = Image.open(os.path.join(TRAIN_IMG, img_name))
-    resolutions.append(img.size)
+for img_name in images[:100]:
+    img_path = os.path.join(IMAGE_DIR, img_name)
+    img = Image.open(img_path)
+    sizes.append(img.size)
 
-unique_res = set(resolutions)
-print("Unique Resolutions Found:", unique_res)
+size_count = Counter(sizes)
 
-# ==========================
-# 4️⃣ Segmentation Color Analysis
-# ==========================
+print("\nImage size distribution:")
+for size, count in size_count.items():
+    print(size, ":", count)
 
-print("\nAnalyzing segmentation colors...")
 
-color_counter = Counter()
+# -----------------------------
+# 4. Check segmentation labels
+# -----------------------------
 
-for seg_name in tqdm(train_seg[:300]):  # sample 300
-    seg = np.array(Image.open(os.path.join(TRAIN_SEG, seg_name)))
-    pixels = seg.reshape(-1, 3)
-    unique_colors = np.unique(pixels, axis=0)
-    
-    for color in unique_colors:
-        color_counter[tuple(color)] += 1
+sample_mask = Image.open(os.path.join(SEGM_DIR, segm[0]))
+mask_array = np.array(sample_mask)
 
-print("\nUnique Colors Found:")
-for color in color_counter:
-    print(color)
+unique_labels = np.unique(mask_array)
 
-print("\nTotal Classes (by unique color count):", len(color_counter))
+print("\nUnique labels in sample segmentation mask:")
+print(unique_labels)
 
-# ==========================
-# 5️⃣ Class Pixel Distribution
-# ==========================
 
-print("\nComputing pixel distribution (sample)...")
+# -----------------------------
+# 5. Explore captions
+# -----------------------------
 
-pixel_distribution = Counter()
+caption_path = os.path.join(BASE_DIR, "captions.json")
 
-for seg_name in tqdm(train_seg[:200]):
-    seg = np.array(Image.open(os.path.join(TRAIN_SEG, seg_name)))
-    pixels = seg.reshape(-1, 3)
-    
-    for pixel in pixels:
-        pixel_distribution[tuple(pixel)] += 1
+if os.path.exists(caption_path):
 
-print("\nTop 10 Most Frequent Colors:")
-for color, count in pixel_distribution.most_common(10):
-    print(color, ":", count)
+    with open(caption_path) as f:
+        captions = json.load(f)
 
-# ==========================
-# 6️⃣ Visual Inspection
-# ==========================
+    print("\nTotal captions:", len(captions))
 
-sample_img = train_images[0]
-
-img = Image.open(os.path.join(TRAIN_IMG, sample_img))
-mask = Image.open(os.path.join(TRAIN_MASK, sample_img))
-seg = Image.open(os.path.join(TRAIN_SEG, sample_img))
-
-plt.figure(figsize=(12,4))
-
-plt.subplot(1,3,1)
-plt.title("Image")
-plt.imshow(img)
-plt.axis("off")
-
-plt.subplot(1,3,2)
-plt.title("Mask")
-plt.imshow(mask)
-plt.axis("off")
-
-plt.subplot(1,3,3)
-plt.title("Segmentation")
-plt.imshow(seg)
-plt.axis("off")
-
-plt.show()
-
-print("\nData analysis complete.")
+    print("\nExample caption:")
+    print(list(captions.items())[0])
